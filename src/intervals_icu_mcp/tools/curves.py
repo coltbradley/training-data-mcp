@@ -255,72 +255,88 @@ async def get_pace_curves(
                     },
                 )
 
-            # Key durations to highlight (in seconds)
-            key_durations = {
-                60: "400m_equivalent",
-                180: "1km_equivalent",
-                300: "5_min",
-                600: "10_min",
-                900: "15_min",
-                1200: "20_min",
-                1800: "30_min",
-                3600: "1_hour",
+            # Key distances to highlight (in meters)
+            key_distances = {
+                400: "400m",
+                800: "800m",
+                1000: "1km",
+                1609.34: "1_mile",
+                5000: "5km",
+                10000: "10km",
+                21097: "half_marathon",
             }
 
-            # Find data points for key durations
+            def _format_pace_per_mi(pace_min_km: float) -> str:
+                """Convert min/km to formatted min:sec /mi string."""
+                pace_per_mi = pace_min_km * 1.60934
+                mins = int(pace_per_mi)
+                secs = int((pace_per_mi - mins) * 60)
+                return f"{mins}:{secs:02d} /mi"
+
+            # Find data points for key distances
+            points_with_dist = [p for p in pace_curve.data if p.distance_meters]
             peak_efforts: dict[str, dict[str, Any]] = {}
-            for seconds, label in key_durations.items():
-                # Find closest data point
+            for target_m, label in key_distances.items():
+                if not points_with_dist:
+                    break
                 closest_point = min(
-                    pace_curve.data,
-                    key=lambda p: abs(p.secs - seconds),
+                    points_with_dist,
+                    key=lambda p: abs((p.distance_meters or 0) - target_m),
                     default=None,
                 )
 
-                if closest_point and abs(closest_point.secs - seconds) <= seconds * 0.1:
-                    # Only include if within 10% of target duration
+                if closest_point and abs((closest_point.distance_meters or 0) - target_m) <= target_m * 0.05:
                     effort: dict[str, Any] = {
+                        "distance_meters": closest_point.distance_meters,
+                        "time_seconds": closest_point.secs,
                         "pace_min_per_km": closest_point.pace,
-                        "duration_seconds": closest_point.secs,
                     }
-                    # Convert pace to min:sec per km format
                     if closest_point.pace:
-                        minutes = int(closest_point.pace)
-                        seconds_part = int((closest_point.pace - minutes) * 60)
-                        effort["pace_formatted"] = f"{minutes}:{seconds_part:02d} /km"
-
-                    if closest_point.date:
-                        effort["date"] = closest_point.date
+                        effort["pace_per_mi"] = _format_pace_per_mi(closest_point.pace)
                     if closest_point.src_activity_id:
                         effort["activity_id"] = closest_point.src_activity_id
+                        # Look up activity name/date from activities dict
+                        act_info = pace_curve.activities.get(closest_point.src_activity_id)
+                        if act_info:
+                            effort["activity_name"] = act_info.get("name")
+                            effort["date"] = act_info.get("start_date_local", "")[:10]
 
                     peak_efforts[label] = effort
 
-            # Calculate summary statistics
-            best_pace_point = min(pace_curve.data, key=lambda p: p.pace or float("inf"))
-            min_duration = min(pace_curve.data, key=lambda p: p.secs)
-            max_duration = max(pace_curve.data, key=lambda p: p.secs)
+            # Summary statistics
+            best_pace_point = min(points_with_dist, key=lambda p: p.pace or float("inf"))
+            shortest = min(points_with_dist, key=lambda p: p.distance_meters or 0)
+            longest = max(points_with_dist, key=lambda p: p.distance_meters or 0)
 
             summary: dict[str, Any] = {
                 "total_data_points": len(pace_curve.data),
-                "best_pace_min_per_km": best_pace_point.pace,
-                "best_pace_duration_seconds": best_pace_point.secs,
-                "duration_range": {
-                    "min_seconds": min_duration.secs,
-                    "max_seconds": max_duration.secs,
+                "fastest_pace_min_per_km": best_pace_point.pace,
+                "fastest_pace_per_mi": _format_pace_per_mi(best_pace_point.pace) if best_pace_point.pace else None,
+                "fastest_pace_distance_meters": best_pace_point.distance_meters,
+                "distance_range_meters": {
+                    "min": shortest.distance_meters,
+                    "max": longest.distance_meters,
                 },
                 "gap_enabled": use_gap,
             }
 
-            if best_pace_point.pace:
-                minutes = int(best_pace_point.pace)
-                seconds_part = int((best_pace_point.pace - minutes) * 60)
-                summary["best_pace_formatted"] = f"{minutes}:{seconds_part:02d} /km"
+            # Include pace models (critical speed, etc.) if available
+            if pace_curve.pace_models:
+                for model in pace_curve.pace_models:
+                    if model.get("type") == "CS":
+                        cs = model.get("criticalSpeed", 0)
+                        if cs > 0:
+                            cs_min_km = (1000 / cs) / 60
+                            summary["critical_speed_m_per_s"] = round(cs, 3)
+                            summary["critical_speed_per_mi"] = _format_pace_per_mi(cs_min_km)
 
-            # If we have dates, show range
-            dates = [p.date for p in pace_curve.data if p.date]
-            if dates:
-                summary["effort_date_range"] = {"oldest": min(dates), "newest": max(dates)}
+            # Include curve set date range
+            if pace_curve.curve_set:
+                summary["curve_period"] = {
+                    "label": pace_curve.curve_set.label,
+                    "start": pace_curve.curve_set.start_date_local,
+                    "end": pace_curve.curve_set.end_date_local,
+                }
 
             result_data: dict[str, Any] = {
                 "period": period_label,

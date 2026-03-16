@@ -238,39 +238,55 @@ class Folder(BaseModel):
 class DataCurvePt(BaseModel):
     """Single point on a power/HR/pace curve."""
 
-    secs: int  # Duration in seconds
+    secs: int  # Duration in seconds (for power/HR curves, or time to cover distance for pace)
     watts: int | None = None  # For power curves
     bpm: int | None = None  # For HR curves
     pace: float | None = None  # For pace curves (min/km)
+    distance_meters: float | None = None  # For pace curves (distance in meters)
     src_activity_id: str | None = None  # Activity where this effort occurred
     date: str | None = None  # Date of the effort
+
+
+class CurveSet(BaseModel):
+    """A single curve period (e.g., '1 year', '42 days') from the API.
+
+    The Intervals.icu API returns curves as parallel arrays:
+    - secs[]/distance[]: x-axis values
+    - values[]: y-axis values (watts, bpm, or seconds)
+    - activity_id[]: source activity for each point
+    """
+
+    id: str
+    label: str | None = None
+    start_date_local: str | None = None
+    end_date_local: str | None = None
+    days: int | None = None
 
 
 class PowerCurve(BaseModel):
     """Power curve data for an athlete."""
 
-    name: str | None = None
-    type: str | None = None
-    athlete_id: str | None = None
-    data: list[DataCurvePt] = Field(default_factory=list[DataCurvePt])
+    curve_set: CurveSet | None = None
+    data: list[DataCurvePt] = Field(default_factory=list)
+    power_models: list[dict] = Field(default_factory=list)
+    activities: dict = Field(default_factory=dict)
 
 
 class HRCurve(BaseModel):
     """Heart rate curve data for an athlete."""
 
-    name: str | None = None
-    type: str | None = None
-    athlete_id: str | None = None
-    data: list[DataCurvePt] = Field(default_factory=list[DataCurvePt])
+    curve_set: CurveSet | None = None
+    data: list[DataCurvePt] = Field(default_factory=list)
+    activities: dict = Field(default_factory=dict)
 
 
 class PaceCurve(BaseModel):
     """Pace curve data for an athlete."""
 
-    name: str | None = None
-    type: str | None = None
-    athlete_id: str | None = None
-    data: list[DataCurvePt] = Field(default_factory=list[DataCurvePt])
+    curve_set: CurveSet | None = None
+    data: list[DataCurvePt] = Field(default_factory=list)
+    pace_models: list[dict] = Field(default_factory=list)
+    activities: dict = Field(default_factory=dict)
 
 
 # ==================== Training Plan Models ====================

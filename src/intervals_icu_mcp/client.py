@@ -13,6 +13,8 @@ from .models import (
     ActivitySummary,
     Athlete,
     BestEffort,
+    CurveSet,
+    DataCurvePt,
     Event,
     Folder,
     Gear,
@@ -564,11 +566,113 @@ class ICUClient:
 
     # ==================== Performance Curve Endpoints ====================
 
+    @staticmethod
+    def _parse_curve_set(raw: dict) -> CurveSet:
+        """Parse a curve set metadata from the API response."""
+        return CurveSet(
+            id=raw.get("id", "unknown"),
+            label=raw.get("label"),
+            start_date_local=raw.get("start_date_local"),
+            end_date_local=raw.get("end_date_local"),
+            days=raw.get("days"),
+        )
+
+    @staticmethod
+    def _parse_power_curve(raw: dict) -> PowerCurve:
+        """Parse power curve API response (parallel arrays) into PowerCurve model."""
+        items = raw.get("list", [])
+        if not items:
+            return PowerCurve()
+
+        curve = items[0]  # Use first (most recent) curve set
+        secs = curve.get("secs", [])
+        values = curve.get("values", [])
+        activity_ids = curve.get("activity_id", [])
+
+        data = []
+        for i in range(len(secs)):
+            data.append(DataCurvePt(
+                secs=secs[i],
+                watts=values[i] if i < len(values) else None,
+                src_activity_id=activity_ids[i] if i < len(activity_ids) else None,
+            ))
+
+        return PowerCurve(
+            curve_set=ICUClient._parse_curve_set(curve),
+            data=data,
+            power_models=curve.get("powerModels", []),
+            activities=raw.get("activities", {}),
+        )
+
+    @staticmethod
+    def _parse_hr_curve(raw: dict) -> HRCurve:
+        """Parse HR curve API response (parallel arrays) into HRCurve model."""
+        items = raw.get("list", [])
+        if not items:
+            return HRCurve()
+
+        curve = items[0]
+        secs = curve.get("secs", [])
+        values = curve.get("values", [])
+        activity_ids = curve.get("activity_id", [])
+
+        data = []
+        for i in range(len(secs)):
+            data.append(DataCurvePt(
+                secs=secs[i],
+                bpm=values[i] if i < len(values) else None,
+                src_activity_id=activity_ids[i] if i < len(activity_ids) else None,
+            ))
+
+        return HRCurve(
+            curve_set=ICUClient._parse_curve_set(curve),
+            data=data,
+            activities=raw.get("activities", {}),
+        )
+
+    @staticmethod
+    def _parse_pace_curve(raw: dict) -> PaceCurve:
+        """Parse pace curve API response (parallel arrays) into PaceCurve model.
+
+        Pace curves use distance[] (meters) as x-axis and values[] (seconds) as y-axis.
+        We convert to pace in min/km: (seconds / distance_m) * 1000 / 60
+        """
+        items = raw.get("list", [])
+        if not items:
+            return PaceCurve()
+
+        curve = items[0]
+        distances = curve.get("distance", [])
+        values = curve.get("values", [])
+        activity_ids = curve.get("activity_id", [])
+
+        data = []
+        for i in range(len(distances)):
+            time_secs = values[i] if i < len(values) else 0
+            dist_m = distances[i]
+            # pace in min/km
+            pace_min_km = (time_secs / dist_m) * 1000 / 60 if dist_m > 0 else None
+
+            data.append(DataCurvePt(
+                secs=time_secs,
+                distance_meters=dist_m,
+                pace=round(pace_min_km, 4) if pace_min_km else None,
+                src_activity_id=activity_ids[i] if i < len(activity_ids) else None,
+            ))
+
+        return PaceCurve(
+            curve_set=ICUClient._parse_curve_set(curve),
+            data=data,
+            pace_models=curve.get("paceModels", []),
+            activities=raw.get("activities", {}),
+        )
+
     async def get_power_curves(
         self,
         athlete_id: str | None = None,
         oldest: str | None = None,
         newest: str | None = None,
+        sport_type: str = "Run",
     ) -> PowerCurve:
         """Get power curve data (best efforts for various durations).
 
@@ -576,26 +680,30 @@ class ICUClient:
             athlete_id: Athlete ID (uses config default if not provided)
             oldest: Oldest date to include (ISO-8601 format)
             newest: Newest date to include (ISO-8601 format)
+            sport_type: Sport type (Run, Ride, etc.)
 
         Returns:
             PowerCurve with best efforts data
         """
         athlete_id = athlete_id or self.config.intervals_icu_athlete_id
-        params = {}
+        params: dict[str, Any] = {"type": sport_type}
 
         if oldest:
             params["oldest"] = oldest
         if newest:
             params["newest"] = newest
 
-        response = await self._request("GET", f"/athlete/{athlete_id}/power-curves", params=params)
-        return PowerCurve(**response.json())
+        response = await self._request(
+            "GET", f"/athlete/{athlete_id}/power-curves.json", params=params
+        )
+        return self._parse_power_curve(response.json())
 
     async def get_hr_curves(
         self,
         athlete_id: str | None = None,
         oldest: str | None = None,
         newest: str | None = None,
+        sport_type: str = "Run",
     ) -> HRCurve:
         """Get heart rate curve data (best efforts for various durations).
 
@@ -603,20 +711,23 @@ class ICUClient:
             athlete_id: Athlete ID (uses config default if not provided)
             oldest: Oldest date to include (ISO-8601 format)
             newest: Newest date to include (ISO-8601 format)
+            sport_type: Sport type (Run, Ride, etc.)
 
         Returns:
             HRCurve with best efforts data
         """
         athlete_id = athlete_id or self.config.intervals_icu_athlete_id
-        params = {}
+        params: dict[str, Any] = {"type": sport_type}
 
         if oldest:
             params["oldest"] = oldest
         if newest:
             params["newest"] = newest
 
-        response = await self._request("GET", f"/athlete/{athlete_id}/hr-curves", params=params)
-        return HRCurve(**response.json())
+        response = await self._request(
+            "GET", f"/athlete/{athlete_id}/hr-curves.json", params=params
+        )
+        return self._parse_hr_curve(response.json())
 
     async def get_pace_curves(
         self,
@@ -624,6 +735,7 @@ class ICUClient:
         oldest: str | None = None,
         newest: str | None = None,
         use_gap: bool = False,
+        sport_type: str = "Run",
     ) -> PaceCurve:
         """Get pace curve data (best efforts for various durations).
 
@@ -632,12 +744,13 @@ class ICUClient:
             oldest: Oldest date to include (ISO-8601 format)
             newest: Newest date to include (ISO-8601 format)
             use_gap: Use Grade Adjusted Pace for running (default False)
+            sport_type: Sport type (Run, Ride, etc.)
 
         Returns:
             PaceCurve with best efforts data
         """
         athlete_id = athlete_id or self.config.intervals_icu_athlete_id
-        params = {}
+        params: dict[str, Any] = {"type": sport_type}
 
         if oldest:
             params["oldest"] = oldest
@@ -646,8 +759,10 @@ class ICUClient:
         if use_gap:
             params["gap"] = "true"
 
-        response = await self._request("GET", f"/athlete/{athlete_id}/pace-curves", params=params)
-        return PaceCurve(**response.json())
+        response = await self._request(
+            "GET", f"/athlete/{athlete_id}/pace-curves.json", params=params
+        )
+        return self._parse_pace_curve(response.json())
 
     # ==================== Workout Library Endpoints ====================
 
@@ -683,8 +798,14 @@ class ICUClient:
             List of Interval objects
         """
         response = await self._request("GET", f"/activity/{activity_id}/intervals")
+        data = response.json()
+        # API returns IntervalsDTO with icu_intervals list, not a plain list
+        if isinstance(data, dict):
+            intervals_list = data.get("icu_intervals", [])
+        else:
+            intervals_list = data
         adapter = TypeAdapter(list[Interval])
-        return adapter.validate_python(response.json())
+        return adapter.validate_python(intervals_list)
 
     async def get_activity_streams(
         self,
@@ -705,24 +826,52 @@ class ICUClient:
         if streams:
             params["types"] = ",".join(streams)
 
-        response = await self._request("GET", f"/activity/{activity_id}/streams", params=params)
-        return ActivityStreams(**response.json())
+        response = await self._request("GET", f"/activity/{activity_id}/streams.json", params=params)
+        data = response.json()
+        # API returns a list of {"type": "heartrate", "data": [...], ...} objects
+        # Convert to dict keyed by stream type for ActivityStreams constructor
+        if isinstance(data, list):
+            streams_dict: dict[str, Any] = {}
+            for stream_obj in data:
+                stream_type = stream_obj.get("type")
+                stream_data = stream_obj.get("data")
+                if stream_type and stream_data is not None:
+                    streams_dict[stream_type] = stream_data
+            return ActivityStreams(**streams_dict)
+        return ActivityStreams(**data)
 
     async def get_best_efforts(
         self,
         activity_id: str,
+        stream: str = "heartrate",
+        duration: int | None = None,
+        count: int = 8,
     ) -> list[BestEffort]:
         """Get best efforts for an activity.
 
         Args:
             activity_id: Activity ID
+            stream: Stream to search (e.g., "heartrate", "watts", "velocity_smooth")
+            duration: Duration of each effort in seconds (optional)
+            count: Number of efforts to return (default 8)
 
         Returns:
             List of BestEffort objects
         """
-        response = await self._request("GET", f"/activity/{activity_id}/best-efforts")
+        params: dict[str, Any] = {"stream": stream, "count": count}
+        if duration is not None:
+            params["duration"] = duration
+        response = await self._request(
+            "GET", f"/activity/{activity_id}/best-efforts", params=params
+        )
+        data = response.json()
+        # API returns BestEfforts with "efforts" list
+        if isinstance(data, dict):
+            efforts_list = data.get("efforts", [])
+        else:
+            efforts_list = data
         adapter = TypeAdapter(list[BestEffort])
-        return adapter.validate_python(response.json())
+        return adapter.validate_python(efforts_list)
 
     async def search_intervals(
         self,
