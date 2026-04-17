@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..auth import update_env_key
+from ..auth import update_env_key, update_tp_env_key
 
 
 def main():
@@ -88,6 +88,31 @@ def main():
     except Exception as e:
         print(f"\n❌ Error saving credentials: {str(e)}")
         return
+
+    # Step 3: TrainingPeaks (optional)
+    print("-" * 60)
+    print("Step 3: TrainingPeaks Authentication (optional)")
+    print("-" * 60)
+    print("Some tools require a TrainingPeaks session cookie.")
+    print("To find it:")
+    print("  1. Log in to trainingpeaks.com")
+    print("  2. Open DevTools (F12)")
+    print("  3. Go to Application → Cookies → trainingpeaks.com")
+    print("  4. Find 'Production_tpAuth'")
+    print("  5. Copy the full value")
+    print()
+
+    tp_cookie = input("Paste your Production_tpAuth cookie value (or press Enter to skip): ").strip()
+
+    if tp_cookie:
+        try:
+            update_tp_env_key(tp_cookie)
+            print("\n✅ TrainingPeaks cookie saved.")
+        except Exception as e:
+            print(f"\n❌ Error saving TrainingPeaks cookie: {str(e)}")
+    else:
+        print("Skipping TrainingPeaks setup.")
+    print()
 
 
 if __name__ == "__main__":
