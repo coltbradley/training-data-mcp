@@ -2,10 +2,14 @@
 .DEFAULT_GOAL := help
 
 SHELL := /bin/bash
-IMAGE_NAME := ghcr.io/eddmann/intervals-icu-mcp
+IMAGE_NAME := ghcr.io/coltbradley/training-data-mcp
 VERSION := $(shell grep '^version' pyproject.toml | cut -d '"' -f 2)
 
 ##@ Setup
+
+setup: install auth ## One-shot setup — installs deps then runs interactive auth
+	@echo ""
+	@echo "Setup complete. Next: add this server to Claude Desktop (see README)."
 
 install: ## Install dependencies using uv
 	uv sync

@@ -354,7 +354,12 @@ async def health_check(request: Any) -> Any:
 
     build_date = os.environ.get("BUILD_DATE", "unknown")
     git_sha = os.environ.get("GIT_SHA", "unknown")
-    return JSONResponse({"status": "ok", "version": f"{build_date} ({git_sha[:7] if git_sha != 'unknown' else 'unknown'})"})
+    return JSONResponse(
+        {
+            "status": "ok",
+            "version": f"{build_date} ({git_sha[:7] if git_sha != 'unknown' else 'unknown'})",
+        }
+    )
 
 
 def main():

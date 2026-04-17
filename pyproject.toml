@@ -21,8 +21,8 @@ intervals-icu-mcp-auth = "intervals_icu_mcp.scripts.setup_auth:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
     "respx>=0.22.0",
@@ -56,8 +56,11 @@ ignore = ["E501"]  # Line length enforced by ruff format instead
 "src/intervals_icu_mcp/server.py" = ["E402"]  # Imports must come after FastMCP initialization
 
 [tool.pyright]
-strict = ["src"]
+include = ["src", "tests"]
 pythonVersion = "3.11"
+pythonPlatform = "All"
+venvPath = "."
+venv = ".venv"
 typeCheckingMode = "basic"
 reportMissingTypeStubs = false
 reportUnknownMemberType = false
