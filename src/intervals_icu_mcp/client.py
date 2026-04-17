@@ -93,7 +93,7 @@ class TPClient:
         if self._client:
             await self._client.aclose()
 
-    async def _request(
+    async def request(
         self,
         method: str,
         endpoint: str,
@@ -698,11 +698,13 @@ class ICUClient:
 
         data = []
         for i in range(len(secs)):
-            data.append(DataCurvePt(
-                secs=secs[i],
-                watts=values[i] if i < len(values) else None,
-                src_activity_id=activity_ids[i] if i < len(activity_ids) else None,
-            ))
+            data.append(
+                DataCurvePt(
+                    secs=secs[i],
+                    watts=values[i] if i < len(values) else None,
+                    src_activity_id=activity_ids[i] if i < len(activity_ids) else None,
+                )
+            )
 
         return PowerCurve(
             curve_set=ICUClient._parse_curve_set(curve),
@@ -725,11 +727,13 @@ class ICUClient:
 
         data = []
         for i in range(len(secs)):
-            data.append(DataCurvePt(
-                secs=secs[i],
-                bpm=values[i] if i < len(values) else None,
-                src_activity_id=activity_ids[i] if i < len(activity_ids) else None,
-            ))
+            data.append(
+                DataCurvePt(
+                    secs=secs[i],
+                    bpm=values[i] if i < len(values) else None,
+                    src_activity_id=activity_ids[i] if i < len(activity_ids) else None,
+                )
+            )
 
         return HRCurve(
             curve_set=ICUClient._parse_curve_set(curve),
@@ -760,12 +764,14 @@ class ICUClient:
             # pace in min/km
             pace_min_km = (time_secs / dist_m) * 1000 / 60 if dist_m > 0 else None
 
-            data.append(DataCurvePt(
-                secs=time_secs,
-                distance_meters=dist_m,
-                pace=round(pace_min_km, 4) if pace_min_km else None,
-                src_activity_id=activity_ids[i] if i < len(activity_ids) else None,
-            ))
+            data.append(
+                DataCurvePt(
+                    secs=time_secs,
+                    distance_meters=dist_m,
+                    pace=round(pace_min_km, 4) if pace_min_km else None,
+                    src_activity_id=activity_ids[i] if i < len(activity_ids) else None,
+                )
+            )
 
         return PaceCurve(
             curve_set=ICUClient._parse_curve_set(curve),
@@ -933,7 +939,9 @@ class ICUClient:
         if streams:
             params["types"] = ",".join(streams)
 
-        response = await self._request("GET", f"/activity/{activity_id}/streams.json", params=params)
+        response = await self._request(
+            "GET", f"/activity/{activity_id}/streams.json", params=params
+        )
         data = response.json()
         # API returns a list of {"type": "heartrate", "data": [...], ...} objects
         # Convert to dict keyed by stream type for ActivityStreams constructor

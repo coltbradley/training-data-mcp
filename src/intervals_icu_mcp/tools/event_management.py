@@ -44,9 +44,20 @@ async def create_event(
 
     # Validate category
     valid_categories = [
-        "WORKOUT", "NOTE", "RACE_A", "RACE_B", "RACE_C",
-        "PLAN", "HOLIDAY", "SICK", "INJURED", "SET_EFTP",
-        "FITNESS_DAYS", "SEASON_START", "TARGET", "SET_FITNESS",
+        "WORKOUT",
+        "NOTE",
+        "RACE_A",
+        "RACE_B",
+        "RACE_C",
+        "PLAN",
+        "HOLIDAY",
+        "SICK",
+        "INJURED",
+        "SET_EFTP",
+        "FITNESS_DAYS",
+        "SEASON_START",
+        "TARGET",
+        "SET_FITNESS",
     ]
     # Accept "RACE" as shorthand for "RACE_A"
     if category.upper() == "RACE":

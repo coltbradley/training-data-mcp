@@ -285,7 +285,10 @@ async def get_pace_curves(
                     default=None,
                 )
 
-                if closest_point and abs((closest_point.distance_meters or 0) - target_m) <= target_m * 0.05:
+                if (
+                    closest_point
+                    and abs((closest_point.distance_meters or 0) - target_m) <= target_m * 0.05
+                ):
                     effort: dict[str, Any] = {
                         "distance_meters": closest_point.distance_meters,
                         "time_seconds": closest_point.secs,
@@ -311,7 +314,9 @@ async def get_pace_curves(
             summary: dict[str, Any] = {
                 "total_data_points": len(pace_curve.data),
                 "fastest_pace_min_per_km": best_pace_point.pace,
-                "fastest_pace_per_mi": _format_pace_per_mi(best_pace_point.pace) if best_pace_point.pace else None,
+                "fastest_pace_per_mi": _format_pace_per_mi(best_pace_point.pace)
+                if best_pace_point.pace
+                else None,
                 "fastest_pace_distance_meters": best_pace_point.distance_meters,
                 "distance_range_meters": {
                     "min": shortest.distance_meters,

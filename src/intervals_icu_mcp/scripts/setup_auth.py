@@ -102,7 +102,9 @@ def main():
     print("  5. Copy the full value")
     print()
 
-    tp_cookie = input("Paste your Production_tpAuth cookie value (or press Enter to skip): ").strip()
+    tp_cookie = input(
+        "Paste your Production_tpAuth cookie value (or press Enter to skip): "
+    ).strip()
 
     if tp_cookie:
         try:

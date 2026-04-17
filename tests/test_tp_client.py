@@ -25,7 +25,7 @@ class TestTPClient:
         route = tp_respx_mock.get("/test").mock(return_value=Response(200, json={"ok": True}))
 
         async with TPClient(tp_config) as client:
-            response = await client._request("GET", "/test")
+            response = await client.request("GET", "/test")
 
         assert response.status_code == 200
         sent_cookie = route.calls[0].request.headers.get("cookie", "")
@@ -37,7 +37,7 @@ class TestTPClient:
 
         async with TPClient(tp_config) as client:
             with pytest.raises(TPAPIError) as exc_info:
-                await client._request("GET", "/test")
+                await client.request("GET", "/test")
 
         assert exc_info.value.status_code == 401
         assert "cookie" in exc_info.value.message.lower()
@@ -48,6 +48,6 @@ class TestTPClient:
 
         async with TPClient(tp_config) as client:
             with pytest.raises(TPAPIError) as exc_info:
-                await client._request("GET", "/missing")
+                await client.request("GET", "/missing")
 
         assert exc_info.value.status_code == 404

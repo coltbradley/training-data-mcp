@@ -56,7 +56,9 @@ class TestTPCheckAuth:
 
     async def test_returns_error_when_creds_missing(self):
         ctx = MagicMock()
-        ctx.get_state.side_effect = lambda k: TPConfig(tp_auth_cookie="") if k == "tp_config" else None
+        ctx.get_state.side_effect = (
+            lambda k: TPConfig(tp_auth_cookie="") if k == "tp_config" else None
+        )
         result = await tp_check_auth(ctx=ctx)
         response = json.loads(result)
         assert "error" in response
@@ -65,9 +67,7 @@ class TestTPCheckAuth:
 
 class TestTPGetPlannedWorkouts:
     async def test_returns_planned_workouts(self, mock_tp_ctx, tp_respx_mock):
-        tp_respx_mock.get("/v1/athlete/self").mock(
-            return_value=Response(200, json={"userId": 42})
-        )
+        tp_respx_mock.get("/v1/athlete/self").mock(return_value=Response(200, json={"userId": 42}))
         tp_respx_mock.get("/v1/workouts/2026-04-14/2026-04-20").mock(
             return_value=Response(
                 200,
@@ -108,9 +108,7 @@ class TestTPGetPlannedWorkouts:
         assert response["error"]["type"] == "auth_error"
 
     async def test_returns_empty_list_for_no_workouts(self, mock_tp_ctx, tp_respx_mock):
-        tp_respx_mock.get("/v1/athlete/self").mock(
-            return_value=Response(200, json={"userId": 42})
-        )
+        tp_respx_mock.get("/v1/athlete/self").mock(return_value=Response(200, json={"userId": 42}))
         tp_respx_mock.get("/v1/workouts/2026-04-14/2026-04-20").mock(
             return_value=Response(200, json=[])
         )
@@ -209,9 +207,7 @@ class TestTPGetCompliance:
         ctx.get_state.side_effect = (
             lambda k: TPConfig(tp_auth_cookie="") if k == "tp_config" else None
         )
-        result = await tp_get_compliance(
-            start_date="2026-04-14", end_date="2026-04-20", ctx=ctx
-        )
+        result = await tp_get_compliance(start_date="2026-04-14", end_date="2026-04-20", ctx=ctx)
         response = json.loads(result)
         assert "error" in response
 
@@ -242,18 +238,14 @@ class TestTPGetCalendar:
         ctx.get_state.side_effect = (
             lambda k: TPConfig(tp_auth_cookie="") if k == "tp_config" else None
         )
-        result = await tp_get_calendar(
-            start_date="2026-04-14", end_date="2026-04-20", ctx=ctx
-        )
+        result = await tp_get_calendar(start_date="2026-04-14", end_date="2026-04-20", ctx=ctx)
         response = json.loads(result)
         assert "error" in response
 
 
 class TestTPGetAthleteMetrics:
     async def test_returns_fitness_metrics(self, mock_tp_ctx, tp_respx_mock):
-        tp_respx_mock.get("/v1/athlete/self").mock(
-            return_value=Response(200, json={"userId": 42})
-        )
+        tp_respx_mock.get("/v1/athlete/self").mock(return_value=Response(200, json={"userId": 42}))
         tp_respx_mock.get("/fitness/v6/athletes/42/fitness").mock(
             return_value=Response(
                 200,

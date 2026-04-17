@@ -47,7 +47,7 @@ async def tp_check_auth(
 
     try:
         async with TPClient(config) as client:
-            response = await client._request("GET", "/v1/athlete/self")
+            response = await client.request("GET", "/v1/athlete/self")
             athlete = response.json()
             return ResponseBuilder.build_response(
                 data={
@@ -82,13 +82,10 @@ async def tp_get_planned_workouts(
 
     try:
         async with TPClient(config) as client:
-            athlete_resp = await client._request("GET", "/v1/athlete/self")
-            user_id = athlete_resp.json().get("userId")  # noqa: F841 — reserved for future use
-
-            workouts_resp = await client._request("GET", f"/v1/workouts/{start_date}/{end_date}")
+            workouts_resp = await client.request("GET", f"/v1/workouts/{start_date}/{end_date}")
             workouts = workouts_resp.json()
 
-            planned = []
+            planned: list[dict[str, Any]] = []
             for w in workouts:
                 workout: dict[str, Any] = {
                     "workout_id": w.get("workoutId"),
@@ -133,7 +130,7 @@ async def tp_get_workout_details(
 
     try:
         async with TPClient(config) as client:
-            response = await client._request("GET", f"/v1/workouts/{workout_id}")
+            response = await client.request("GET", f"/v1/workouts/{workout_id}")
             w = response.json()
 
             return ResponseBuilder.build_response(
@@ -177,10 +174,10 @@ async def tp_get_compliance(
 
     try:
         async with TPClient(config) as client:
-            response = await client._request("GET", f"/v1/workouts/{start_date}/{end_date}")
+            response = await client.request("GET", f"/v1/workouts/{start_date}/{end_date}")
             workouts = response.json()
 
-            compliance_data = []
+            compliance_data: list[dict[str, Any]] = []
             for w in workouts:
                 if w.get("totalTimePlanned") and w.get("totalTime"):
                     compliance_data.append(
@@ -231,7 +228,7 @@ async def tp_get_calendar(
 
     try:
         async with TPClient(config) as client:
-            response = await client._request("GET", f"/v1/workouts/{start_date}/{end_date}")
+            response = await client.request("GET", f"/v1/workouts/{start_date}/{end_date}")
             items = response.json()
 
             by_date: dict[str, list[dict[str, Any]]] = {}
@@ -278,13 +275,11 @@ async def tp_get_athlete_metrics(
 
     try:
         async with TPClient(config) as client:
-            athlete_resp = await client._request("GET", "/v1/athlete/self")
+            athlete_resp = await client.request("GET", "/v1/athlete/self")
             athlete = athlete_resp.json()
-            user_id = athlete.get("userId")
+            user_id: str | None = athlete.get("userId")
 
-            metrics_resp = await client._request(
-                "GET", f"/fitness/v6/athletes/{user_id}/fitness"
-            )
+            metrics_resp = await client.request("GET", f"/fitness/v6/athletes/{user_id}/fitness")
             metrics = metrics_resp.json()
 
             return ResponseBuilder.build_response(
