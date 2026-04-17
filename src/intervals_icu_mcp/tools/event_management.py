@@ -43,7 +43,14 @@ async def create_event(
     config: ICUConfig = ctx.get_state("config")
 
     # Validate category
-    valid_categories = ["WORKOUT", "NOTE", "RACE", "GOAL"]
+    valid_categories = [
+        "WORKOUT", "NOTE", "RACE_A", "RACE_B", "RACE_C",
+        "PLAN", "HOLIDAY", "SICK", "INJURED", "SET_EFTP",
+        "FITNESS_DAYS", "SEASON_START", "TARGET", "SET_FITNESS",
+    ]
+    # Accept "RACE" as shorthand for "RACE_A"
+    if category.upper() == "RACE":
+        category = "RACE_A"
     if category.upper() not in valid_categories:
         return ResponseBuilder.build_error_response(
             f"Invalid category. Must be one of: {', '.join(valid_categories)}",
@@ -60,9 +67,13 @@ async def create_event(
         )
 
     try:
-        # Build event data
+        # Build event data - API requires datetime format, not just date
+        date_str = start_date
+        if len(date_str) == 10:  # YYYY-MM-DD format, append time
+            date_str = f"{date_str}T00:00:00"
+
         event_data: dict[str, Any] = {
-            "start_date_local": start_date,
+            "start_date_local": date_str,
             "name": name,
             "category": category.upper(),
         }

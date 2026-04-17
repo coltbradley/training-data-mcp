@@ -66,6 +66,14 @@ from .tools.sport_settings import (
     get_sport_settings,
     update_sport_settings,
 )
+from .tools.trainingpeaks import (
+    tp_check_auth,
+    tp_get_athlete_metrics,
+    tp_get_calendar,
+    tp_get_compliance,
+    tp_get_planned_workouts,
+    tp_get_workout_details,
+)
 from .tools.wellness import get_wellness_data, get_wellness_for_date, update_wellness
 from .tools.workout_library import get_workout_library, get_workouts_in_folder
 
@@ -134,6 +142,14 @@ mcp.tool()(update_sport_settings)
 mcp.tool()(apply_sport_settings)
 mcp.tool()(create_sport_settings)
 mcp.tool()(delete_sport_settings)
+
+# Register TrainingPeaks tools
+mcp.tool()(tp_check_auth)
+mcp.tool()(tp_get_planned_workouts)
+mcp.tool()(tp_get_workout_details)
+mcp.tool()(tp_get_compliance)
+mcp.tool()(tp_get_calendar)
+mcp.tool()(tp_get_athlete_metrics)
 
 
 # MCP Resources - Provide ongoing context

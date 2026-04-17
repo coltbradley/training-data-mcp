@@ -217,6 +217,12 @@ async def get_activity_intervals(
 
 async def get_best_efforts(
     activity_id: Annotated[str, "Activity ID to analyze"],
+    stream: Annotated[
+        str,
+        "Stream to search for best efforts: 'heartrate', 'watts', 'velocity_smooth', 'cadence', etc.",
+    ] = "heartrate",
+    duration: Annotated[int | None, "Duration of each effort in seconds (optional)"] = None,
+    count: Annotated[int, "Number of efforts to return (default 8)"] = 8,
     ctx: Context | None = None,
 ) -> str:
     """Get best efforts/peak performances from an activity.
@@ -227,6 +233,9 @@ async def get_best_efforts(
 
     Args:
         activity_id: The unique ID of the activity
+        stream: Stream to analyze (heartrate, watts, velocity_smooth, cadence)
+        duration: Specific effort duration in seconds (optional)
+        count: Number of efforts to return (default 8)
 
     Returns:
         JSON string with best efforts data
@@ -236,7 +245,9 @@ async def get_best_efforts(
 
     try:
         async with ICUClient(config) as client:
-            best_efforts = await client.get_best_efforts(activity_id)
+            best_efforts = await client.get_best_efforts(
+                activity_id, stream=stream, duration=duration, count=count
+            )
 
             if not best_efforts:
                 return ResponseBuilder.build_response(
