@@ -1,5 +1,16 @@
-"""TrainingPeaks tools for intervals-icu-mcp server."""
+"""TrainingPeaks tools for intervals-icu-mcp server.
 
+Endpoint reference (verified against live TP API):
+- GET /users/v3/user                                            -> user profile (userId, username)
+- GET /fitness/v6/athletes/{id}/workouts/{start}/{end}          -> workouts in date range
+- GET /fitness/v6/athletes/{id}/workouts/{workoutId}            -> single workout details
+- POST /fitness/v1/athletes/{id}/reporting/performancedata/{s}/{e}  -> PMC (CTL/ATL/TSB) data
+
+TP uses the same number for userId and athleteId for self-owned accounts, so
+we derive athleteId from the user profile on each call.
+"""
+
+from datetime import date, timedelta
 from typing import Any
 
 from fastmcp import Context
@@ -30,6 +41,20 @@ _TP_NOT_CONFIGURED = ResponseBuilder.build_error_response(
 )
 
 
+async def _get_user_info(client: TPClient) -> tuple[int, str | None]:
+    """Fetch TP user profile. Returns (athlete_id, username)."""
+    resp = await client.request("GET", "/users/v3/user")
+    payload = resp.json()
+    user = payload.get("user") if isinstance(payload, dict) else None
+    if not isinstance(user, dict):
+        raise TPAPIError("Unexpected /users/v3/user response shape", resp.status_code)
+    user_id = user.get("userId")
+    if not isinstance(user_id, int):
+        raise TPAPIError("No userId in TrainingPeaks profile response", resp.status_code)
+    username = user.get("userName") or user.get("username")
+    return user_id, username
+
+
 async def tp_check_auth(
     ctx: Context | None = None,
 ) -> str:
@@ -47,13 +72,12 @@ async def tp_check_auth(
 
     try:
         async with TPClient(config) as client:
-            response = await client.request("GET", "/v1/athlete/self")
-            athlete = response.json()
+            athlete_id, username = await _get_user_info(client)
             return ResponseBuilder.build_response(
                 data={
                     "authenticated": True,
-                    "user_id": athlete.get("userId"),
-                    "username": athlete.get("username"),
+                    "athlete_id": athlete_id,
+                    "username": username,
                 },
                 query_type="tp_auth_check",
             )
@@ -82,22 +106,30 @@ async def tp_get_planned_workouts(
 
     try:
         async with TPClient(config) as client:
-            workouts_resp = await client.request("GET", f"/v1/workouts/{start_date}/{end_date}")
-            workouts = workouts_resp.json()
+            athlete_id, _ = await _get_user_info(client)
+            resp = await client.request(
+                "GET",
+                f"/fitness/v6/athletes/{athlete_id}/workouts/{start_date}/{end_date}",
+            )
+            workouts = resp.json()
 
             planned: list[dict[str, Any]] = []
             for w in workouts:
-                workout: dict[str, Any] = {
-                    "workout_id": w.get("workoutId"),
-                    "date": w.get("workoutDay"),
-                    "title": w.get("title"),
-                    "sport": w.get("workoutTypeValueId"),
-                    "description": w.get("description"),
-                    "planned_duration_secs": w.get("totalTimePlanned"),
-                    "planned_distance_meters": w.get("totalDistancePlanned"),
-                    "planned_tss": w.get("tssPlanned"),
-                }
-                planned.append(workout)
+                planned.append(
+                    {
+                        "workout_id": w.get("workoutId"),
+                        "date": (w.get("workoutDay") or "").split("T")[0] or None,
+                        "title": w.get("title"),
+                        "workout_type_id": w.get("workoutTypeValueId"),
+                        "description": w.get("description"),
+                        "coach_comments": w.get("coachComments"),
+                        "planned_duration_secs": w.get("totalTimePlanned"),
+                        "planned_distance_meters": w.get("distancePlanned"),
+                        "planned_tss": w.get("tssPlanned"),
+                        "planned_if": w.get("ifPlanned"),
+                        "completed": bool(w.get("completed")),
+                    }
+                )
 
             return ResponseBuilder.build_response(
                 data={"workouts": planned, "count": len(planned)},
@@ -130,19 +162,28 @@ async def tp_get_workout_details(
 
     try:
         async with TPClient(config) as client:
-            response = await client.request("GET", f"/v1/workouts/{workout_id}")
-            w = response.json()
+            athlete_id, _ = await _get_user_info(client)
+            resp = await client.request(
+                "GET",
+                f"/fitness/v6/athletes/{athlete_id}/workouts/{workout_id}",
+            )
+            w = resp.json()
 
             return ResponseBuilder.build_response(
                 data={
                     "workout_id": w.get("workoutId"),
                     "title": w.get("title"),
-                    "date": w.get("workoutDay"),
+                    "date": (w.get("workoutDay") or "").split("T")[0] or None,
+                    "workout_type_id": w.get("workoutTypeValueId"),
                     "description": w.get("description"),
                     "coach_comments": w.get("coachComments"),
                     "planned_duration_secs": w.get("totalTimePlanned"),
-                    "planned_distance_meters": w.get("totalDistancePlanned"),
+                    "planned_distance_meters": w.get("distancePlanned"),
                     "planned_tss": w.get("tssPlanned"),
+                    "planned_if": w.get("ifPlanned"),
+                    "actual_duration_secs": w.get("totalTime"),
+                    "actual_distance_meters": w.get("distance"),
+                    "actual_tss": w.get("tssActual"),
                     "structure": w.get("structure"),
                 },
                 query_type="tp_workout_details",
@@ -174,24 +215,30 @@ async def tp_get_compliance(
 
     try:
         async with TPClient(config) as client:
-            response = await client.request("GET", f"/v1/workouts/{start_date}/{end_date}")
-            workouts = response.json()
+            athlete_id, _ = await _get_user_info(client)
+            resp = await client.request(
+                "GET",
+                f"/fitness/v6/athletes/{athlete_id}/workouts/{start_date}/{end_date}",
+            )
+            workouts = resp.json()
 
             compliance_data: list[dict[str, Any]] = []
             for w in workouts:
-                if w.get("totalTimePlanned") and w.get("totalTime"):
+                has_planned = w.get("totalTimePlanned") or w.get("tssPlanned")
+                has_actual = w.get("totalTime") or w.get("tssActual")
+                if has_planned and has_actual:
                     compliance_data.append(
                         {
                             "workout_id": w.get("workoutId"),
-                            "date": w.get("workoutDay"),
+                            "date": (w.get("workoutDay") or "").split("T")[0] or None,
                             "title": w.get("title"),
                             "planned_duration_secs": w.get("totalTimePlanned"),
                             "actual_duration_secs": w.get("totalTime"),
                             "planned_tss": w.get("tssPlanned"),
-                            "actual_tss": w.get("tss"),
-                            "planned_distance_meters": w.get("totalDistancePlanned"),
-                            "actual_distance_meters": w.get("totalDistance"),
-                            "compliance_code": w.get("complianceCode"),
+                            "actual_tss": w.get("tssActual"),
+                            "planned_distance_meters": w.get("distancePlanned"),
+                            "actual_distance_meters": w.get("distance"),
+                            "compliance_code": w.get("complianceDurationPercent"),
                         }
                     )
 
@@ -228,23 +275,25 @@ async def tp_get_calendar(
 
     try:
         async with TPClient(config) as client:
-            response = await client.request("GET", f"/v1/workouts/{start_date}/{end_date}")
-            items = response.json()
+            athlete_id, _ = await _get_user_info(client)
+            resp = await client.request(
+                "GET",
+                f"/fitness/v6/athletes/{athlete_id}/workouts/{start_date}/{end_date}",
+            )
+            items = resp.json()
 
             by_date: dict[str, list[dict[str, Any]]] = {}
             for item in items:
-                date = item.get("workoutDay", "unknown")
-                if date not in by_date:
-                    by_date[date] = []
-                by_date[date].append(
+                date_key = (item.get("workoutDay") or "unknown").split("T")[0]
+                by_date.setdefault(date_key, []).append(
                     {
                         "id": item.get("workoutId"),
                         "title": item.get("title"),
-                        "sport": item.get("workoutTypeValueId"),
+                        "workout_type_id": item.get("workoutTypeValueId"),
                         "planned_duration_secs": item.get("totalTimePlanned"),
-                        "completed": item.get("completed", False),
+                        "completed": bool(item.get("completed")),
                         "tss_planned": item.get("tssPlanned"),
-                        "tss_actual": item.get("tss"),
+                        "tss_actual": item.get("tssActual"),
                     }
                 )
 
@@ -260,13 +309,13 @@ async def tp_get_calendar(
 async def tp_get_athlete_metrics(
     ctx: Context | None = None,
 ) -> str:
-    """Get TrainingPeaks fitness metrics (ATL, CTL, TSB).
+    """Get TrainingPeaks fitness metrics (CTL/ATL/TSB).
 
-    Returns TrainingPeaks' own training load numbers. Compare with Intervals.icu's
-    get_fitness_summary to see if the platforms agree on your current form.
+    Returns TrainingPeaks' own training load numbers for the most recent 90 days.
+    Compare with Intervals.icu's get_fitness_summary to see if the platforms agree.
 
     Returns:
-        JSON with TP fitness metrics
+        JSON with TP fitness metrics (current CTL/ATL/TSB plus daily history)
     """
     assert ctx is not None
     config = _require_tp_config(ctx)
@@ -275,25 +324,44 @@ async def tp_get_athlete_metrics(
 
     try:
         async with TPClient(config) as client:
-            athlete_resp = await client.request("GET", "/v1/athlete/self")
-            athlete = athlete_resp.json()
-            user_id: int | None = athlete.get("userId")
-            if not user_id:
-                return ResponseBuilder.build_error_response(
-                    "Could not retrieve userId from TrainingPeaks athlete profile.",
-                    error_type="api_error",
+            athlete_id, _ = await _get_user_info(client)
+
+            end = date.today()
+            start = end - timedelta(days=90)
+            body = {
+                "atlConstant": 7,
+                "atlStart": 0,
+                "ctlConstant": 42,
+                "ctlStart": 0,
+                "workoutTypes": [],
+            }
+            resp = await client.request(
+                "POST",
+                f"/fitness/v1/athletes/{athlete_id}/reporting/performancedata/{start}/{end}",
+                json=body,
+            )
+            entries = resp.json() or []
+
+            daily: list[dict[str, Any]] = []
+            for entry in entries:
+                day = (entry.get("workoutDay") or "").split("T")[0]
+                daily.append(
+                    {
+                        "date": day,
+                        "tss": entry.get("tssActual"),
+                        "ctl": round(entry.get("ctl") or 0, 1),
+                        "atl": round(entry.get("atl") or 0, 1),
+                        "tsb": round(entry.get("tsb") or 0, 1),
+                    }
                 )
 
-            metrics_resp = await client.request("GET", f"/fitness/v6/athletes/{user_id}/fitness")
-            metrics = metrics_resp.json()
-
+            current = daily[-1] if daily else None
             return ResponseBuilder.build_response(
                 data={
-                    "atl": metrics.get("atl"),
-                    "ctl": metrics.get("ctl"),
-                    "tsb": metrics.get("tsb"),
-                    "ramp_rate": metrics.get("rampRate"),
+                    "current": current,
+                    "history": daily,
                 },
+                metadata={"start_date": str(start), "end_date": str(end)},
                 query_type="tp_athlete_metrics",
             )
     except TPAPIError as e:

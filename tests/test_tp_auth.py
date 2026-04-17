@@ -56,11 +56,14 @@ class TestConfigMiddlewareTP:
         assert states["tp_config"].tp_auth_cookie == "test_tp_cookie_value"
 
     @pytest.mark.asyncio
-    async def test_middleware_injects_tp_config_when_absent(self, monkeypatch):
+    async def test_middleware_injects_tp_config_when_absent(self, monkeypatch, tmp_path):
         """ConfigMiddleware injects tp_config even when TP cookie is not set (no ToolError)."""
+        monkeypatch.chdir(tmp_path)  # isolate from any real .env in the repo
         monkeypatch.setenv("INTERVALS_ICU_API_KEY", "test_api_key_12345")
         monkeypatch.setenv("INTERVALS_ICU_ATHLETE_ID", "i654321")
-        monkeypatch.delenv("TP_AUTH_COOKIE", raising=False)
+        # setenv to "" (not delenv) so load_dotenv's override=False default won't
+        # repopulate this value from the repo's real .env during the test.
+        monkeypatch.setenv("TP_AUTH_COOKIE", "")
 
         middleware = ConfigMiddleware()
 

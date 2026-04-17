@@ -14,6 +14,7 @@ class ICUConfig(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     intervals_icu_api_key: str = ""
@@ -53,6 +54,7 @@ class TPConfig(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     tp_auth_cookie: str = ""
