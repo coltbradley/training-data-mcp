@@ -1,5 +1,6 @@
-"""Intervals.icu MCP Server - FastMCP entry point."""
+"""Training Data MCP Server - FastMCP entry point."""
 
+import os
 from typing import Any
 
 from dotenv import load_dotenv
@@ -9,7 +10,7 @@ from fastmcp import FastMCP
 load_dotenv()
 
 # Initialize FastMCP server
-mcp = FastMCP("Intervals.icu")
+mcp = FastMCP("Training Data")
 
 # Register middleware
 from .middleware import ConfigMiddleware
@@ -346,10 +347,24 @@ Provide a structured weekly plan with:
 Then offer to create the events in my calendar if I approve the plan."""
 
 
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Any) -> Any:
+    """Health check endpoint for Docker and load balancers."""
+    from starlette.responses import JSONResponse
+
+    build_date = os.environ.get("BUILD_DATE", "unknown")
+    git_sha = os.environ.get("GIT_SHA", "unknown")
+    return JSONResponse({"status": "ok", "version": f"{build_date} ({git_sha[:7] if git_sha != 'unknown' else 'unknown'})"})
+
+
 def main():
-    """Main entry point for the Intervals.icu MCP server."""
-    # Run the server with stdio transport (default)
-    mcp.run()
+    """Main entry point for the Training Data MCP server."""
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    if transport == "http":
+        port = int(os.environ.get("PORT", "8080"))
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,54 @@
+# TrueNAS SCALE — paste this into Apps → Discover → Install via YAML
+#
+# IMPORTANT: Set environment variables in the TrueNAS app configuration UI.
+# Do NOT set them in this file — TrueNAS manages env vars separately.
+#
+# UPDATING: Every push to main automatically publishes a new :latest image.
+# Watchtower checks every 5 minutes and restarts the container automatically.
+# To force an immediate update, run in the TrueNAS shell:
+#
+#   docker pull ghcr.io/coltbradley/training-data-mcp:latest
+#   docker restart training-data-mcp
+#
+# Check server version: curl http://localhost:8080/health | grep version
+#
+# CLAUDE DESKTOP CONFIG:
+# Add to ~/Library/Application Support/Claude/claude_desktop_config.json
+# (use your Tailscale hostname or local IP):
+#
+#   "mcpServers": {
+#     "training-data": {
+#       "type": "url",
+#       "url": "http://<truenas-host>:8080/mcp"
+#     }
+#   }
+#
+# Required environment variables:
+#   INTERVALS_ICU_API_KEY     - Intervals.icu API key (Settings → Developer)
+#   INTERVALS_ICU_ATHLETE_ID  - Your athlete ID (e.g. i123456, from profile URL)
+#   TP_AUTH_COOKIE            - TrainingPeaks Production_tpAuth cookie value
+#                               (DevTools → Application → Cookies → trainingpeaks.com)
+#                               Expires periodically — update here when TP tools stop working
+#
+# Optional:
+#   PORT                      - HTTP port (default: 8080)
+
+services:
+  training-data-mcp:
+    image: ghcr.io/coltbradley/training-data-mcp:latest
+    container_name: training-data-mcp
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup training-data-mcp
+    restart: unless-stopped

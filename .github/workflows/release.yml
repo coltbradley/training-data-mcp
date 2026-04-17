@@ -1,60 +1,54 @@
-name: Release
+name: CI
 
 on:
   push:
-    branches:
-      - main
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: coltbradley/training-data-mcp
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
     name: Run Tests
     uses: ./.github/workflows/test.yml
 
-  build-and-push:
-    name: Build and Push Docker Image
+  docker-publish:
     runs-on: ubuntu-latest
     needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+    env:
+      IMAGE_NAME: ghcr.io/coltbradley/training-data-mcp
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix={{branch}}-
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+      - name: Set build date
+        id: date
+        run: echo "value=$(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_OUTPUT
+
+      - name: Set date tag
+        id: datetag
+        run: echo "value=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.datetag.outputs.value }}
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          build-args: |
+            BUILD_DATE=${{ steps.date.outputs.value }}
+            GIT_SHA=${{ github.sha }}

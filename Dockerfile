@@ -1,44 +1,41 @@
 # Multi-stage build for minimal final image
-FROM --platform=$TARGETPLATFORM ghcr.io/astral-sh/uv:latest AS uv
+FROM ghcr.io/astral-sh/uv:latest AS uv
 
-FROM --platform=$TARGETPLATFORM python:3.11-slim AS builder
+FROM python:3.11-slim AS builder
 
-# Install uv for faster dependency management
 COPY --from=uv /uv /usr/local/bin/uv
 
-# Set working directory
 WORKDIR /app
 
-# Copy dependency files and README (needed for package metadata)
 COPY pyproject.toml uv.lock* README.md ./
-
-# Copy source code (needed for building the package)
 COPY src/ ./src/
 
-# Install dependencies into a virtual environment
 RUN uv sync --frozen --no-dev
 
-# Final stage - minimal runtime image
-FROM --platform=$TARGETPLATFORM python:3.11-slim
+FROM python:3.11-slim
 
-# Set working directory
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
-
-# Copy application code
 COPY src/ ./src/
 COPY pyproject.toml ./
 
-# Set environment variables
+ARG BUILD_DATE
+ARG GIT_SHA
+
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    MCP_TRANSPORT=http \
+    PORT=8080 \
+    BUILD_DATE=${BUILD_DATE} \
+    GIT_SHA=${GIT_SHA}
 
-# Health check (optional - checks if Python and dependencies are available)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import intervals_icu_mcp; print('ok')" || exit 1
+EXPOSE 8080
 
-# Run the MCP server
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
 ENTRYPOINT ["python", "-m", "intervals_icu_mcp.server"]
