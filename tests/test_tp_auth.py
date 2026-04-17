@@ -1,10 +1,6 @@
 """Tests for TrainingPeaks auth configuration."""
 
-import os
-
-import pytest
-
-from intervals_icu_mcp.auth import TPConfig, load_tp_config, validate_tp_credentials
+from intervals_icu_mcp.auth import TPConfig, validate_tp_credentials
 
 
 class TestTPConfig:
