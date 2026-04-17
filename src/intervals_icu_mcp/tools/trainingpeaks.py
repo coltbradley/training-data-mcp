@@ -277,7 +277,12 @@ async def tp_get_athlete_metrics(
         async with TPClient(config) as client:
             athlete_resp = await client.request("GET", "/v1/athlete/self")
             athlete = athlete_resp.json()
-            user_id: str | None = athlete.get("userId")
+            user_id: int | None = athlete.get("userId")
+            if not user_id:
+                return ResponseBuilder.build_error_response(
+                    "Could not retrieve userId from TrainingPeaks athlete profile.",
+                    error_type="api_error",
+                )
 
             metrics_resp = await client.request("GET", f"/fitness/v6/athletes/{user_id}/fitness")
             metrics = metrics_resp.json()

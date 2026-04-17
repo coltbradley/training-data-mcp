@@ -51,3 +51,13 @@ class TestTPClient:
                 await client.request("GET", "/missing")
 
         assert exc_info.value.status_code == 404
+
+    async def test_client_raises_tp_api_error_on_403(self, tp_config, tp_respx_mock):
+        """TPClient raises TPAPIError with status_code 403 on 403 responses."""
+        tp_respx_mock.get("/v1/test").mock(return_value=Response(403))
+
+        async with TPClient(tp_config) as client:
+            with pytest.raises(TPAPIError) as exc_info:
+                await client.request("GET", "/v1/test")
+
+        assert exc_info.value.status_code == 403
