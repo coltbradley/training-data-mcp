@@ -2,15 +2,15 @@
 
 ![Training Data MCP Server](docs/heading.png)
 
-An MCP (Model Context Protocol) server that gives Claude access to your training data from **Intervals.icu** and **TrainingPeaks**.
+An MCP (Model Context Protocol) server that gives Claude access to your training data from **Intervals.icu**.
 
-> Repo is `intervals-icu-mcp`. The published Docker image is `ghcr.io/coltbradley/training-data-mcp` — same project, renamed once TrainingPeaks was added.
+> Repo is `intervals-icu-mcp`. The published Docker image is `ghcr.io/coltbradley/training-data-mcp`.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
 ## What you get
 
-- **54 tools** across 10 categories (Intervals.icu + TrainingPeaks)
+- **48 tools** across 9 categories
 - **1 MCP resource** — athlete profile for ongoing context
 - **6 MCP prompts** — canned queries for common analyses
 - Runs locally over stdio **or** remotely over HTTP (Docker)
@@ -31,7 +31,6 @@ make setup
 
 1. Your Intervals.icu **API key** (from [intervals.icu/settings](https://intervals.icu/settings) → Developer)
 2. Your Intervals.icu **athlete ID** (from your profile URL, e.g. `i123456`)
-3. _(Optional)_ your TrainingPeaks session cookie (see [TrainingPeaks setup](#trainingpeaks-optional))
 
 Then add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -88,24 +87,12 @@ Claude Desktop config:
 
 All config lives in `.env` (or container env vars).
 
-| Variable                   | Required | Purpose                                                               |
-| -------------------------- | -------- | --------------------------------------------------------------------- |
-| `INTERVALS_ICU_API_KEY`    | yes      | Intervals.icu API key (Settings → Developer)                          |
-| `INTERVALS_ICU_ATHLETE_ID` | yes      | Your athlete ID, e.g. `i123456`                                       |
-| `TP_AUTH_COOKIE`           | optional | TrainingPeaks `Production_tpAuth` cookie — enables the 6 `tp_*` tools |
-| `MCP_TRANSPORT`            | optional | `stdio` (default) or `http`                                           |
-| `PORT`                     | optional | HTTP port (default `8080`)                                            |
-
-### TrainingPeaks (optional)
-
-TrainingPeaks doesn't have a public API, so auth uses your logged-in session cookie.
-
-1. Log in to [trainingpeaks.com](https://www.trainingpeaks.com)
-2. Open DevTools (F12) → Application → Cookies → `trainingpeaks.com`
-3. Copy the value of `Production_tpAuth`
-4. Paste it when `make auth` asks, or set `TP_AUTH_COOKIE` in `.env`
-
-The cookie expires periodically. When `tp_*` tools start failing with auth errors, repeat the steps.
+| Variable                   | Required | Purpose                                      |
+| -------------------------- | -------- | -------------------------------------------- |
+| `INTERVALS_ICU_API_KEY`    | yes      | Intervals.icu API key (Settings → Developer) |
+| `INTERVALS_ICU_ATHLETE_ID` | yes      | Your athlete ID, e.g. `i123456`              |
+| `MCP_TRANSPORT`            | optional | `stdio` (default) or `http`                  |
+| `PORT`                     | optional | HTTP port (default `8080`)                   |
 
 ---
 
@@ -119,9 +106,7 @@ Use natural language — Claude picks the right tool.
 "Deep dive on yesterday's ride — power, HR, intervals, best efforts."
 "What's my 20-minute power? Estimate my FTP."
 "How was my recovery this week?"
-"What does my coach have planned for me this week in TrainingPeaks?"
 "Compare my planned TSS to actual TSS for the last 2 weeks."
-"Do Intervals and TrainingPeaks agree on my current CTL?"
 ```
 
 ### Built-in prompts
@@ -175,10 +160,6 @@ Accessible via prompt suggestions in Claude:
 
 `get-sport-settings` · `update-sport-settings` · `apply-sport-settings` · `create-sport-settings` · `delete-sport-settings`
 
-### TrainingPeaks (6)
-
-`tp_check_auth` · `tp_get_planned_workouts` · `tp_get_workout_details` · `tp_get_compliance` · `tp_get_calendar` · `tp_get_athlete_metrics`
-
 ### Resource
 
 `intervals-icu://athlete/profile` — current fitness metrics and sport settings
@@ -202,7 +183,6 @@ make help       # list all targets
 ## Troubleshooting
 
 - **"Intervals.icu credentials not configured"** — run `make auth`.
-- **TrainingPeaks tools return 401** — your session cookie expired. Re-run `make auth` and paste a fresh `Production_tpAuth` cookie.
 - **Docker health check failing** — `curl http://localhost:8080/health` should return `{"status": "ok", "version": "..."}`.
 - **Claude Desktop can't find the server** — make sure the path in the config is absolute, and restart Claude Desktop fully.
 
@@ -214,4 +194,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Disclaimer
 
-Not affiliated with Intervals.icu or TrainingPeaks. All trademarks belong to their respective owners.
+Not affiliated with Intervals.icu. All trademarks belong to their respective owners.

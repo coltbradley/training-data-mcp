@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 from pydantic import TypeAdapter
 
-from .auth import ICUConfig, TPConfig
+from .auth import ICUConfig
 from .models import (
     Activity,
     ActivitySearchResult,
@@ -43,113 +43,6 @@ class ICUAPIError(Exception):
         self.message = message
         self.status_code = status_code
         super().__init__(self.message)
-
-
-class TPAPIError(Exception):
-    """Custom exception for TrainingPeaks API errors."""
-
-    def __init__(self, message: str, status_code: int | None = None):
-        """Initialize API error.
-
-        Args:
-            message: Error message
-            status_code: HTTP status code if available
-        """
-        self.message = message
-        self.status_code = status_code
-        super().__init__(self.message)
-
-
-class TPClient:
-    """Async HTTP client for TrainingPeaks API with cookie-based auth."""
-
-    BASE_URL = "https://tpapi.trainingpeaks.com"
-
-    def __init__(self, config: TPConfig):
-        """Initialize the TrainingPeaks API client.
-
-        Args:
-            config: TPConfig with auth cookie
-        """
-        self.config = config
-        self._client: httpx.AsyncClient | None = None
-
-    async def __aenter__(self) -> "TPClient":
-        """Async context manager entry."""
-        self._client = httpx.AsyncClient(
-            base_url=self.BASE_URL,
-            timeout=30.0,
-            headers={"Cookie": f"Production_tpAuth={self.config.tp_auth_cookie}"},
-        )
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: object,
-    ) -> None:
-        """Async context manager exit."""
-        if self._client:
-            await self._client.aclose()
-
-    async def request(
-        self,
-        method: str,
-        endpoint: str,
-        **kwargs: Any,
-    ) -> httpx.Response:
-        """Make an authenticated request to the TrainingPeaks API.
-
-        Args:
-            method: HTTP method (GET, POST, PUT, DELETE)
-            endpoint: API endpoint path
-            **kwargs: Additional arguments for httpx.request
-
-        Returns:
-            httpx.Response object
-
-        Raises:
-            TPAPIError: If the request fails
-        """
-        if not self._client:
-            raise RuntimeError("Client not initialized. Use async context manager.")
-
-        try:
-            response = await self._client.request(method, endpoint, **kwargs)
-
-            if response.status_code == 401:
-                raise TPAPIError(
-                    "TrainingPeaks cookie expired or invalid. Re-run 'intervals-icu-mcp-auth' and"
-                    " paste a fresh Production_tpAuth cookie"
-                    " (DevTools → Application → Cookies → trainingpeaks.com).",
-                    status_code=401,
-                )
-
-            if response.status_code == 403:
-                raise TPAPIError(
-                    "TrainingPeaks access denied. Your cookie may have expired.",
-                    status_code=403,
-                )
-
-            if response.status_code == 404:
-                raise TPAPIError("TrainingPeaks resource not found.", status_code=404)
-
-            if response.status_code == 429:
-                raise TPAPIError(
-                    "TrainingPeaks rate limit exceeded. Try again later.", status_code=429
-                )
-
-            response.raise_for_status()
-            return response
-
-        except httpx.HTTPStatusError as e:
-            raise TPAPIError(
-                f"HTTP {e.response.status_code}: {e.response.text}",
-                e.response.status_code,
-            ) from e
-        except httpx.RequestError as e:
-            raise TPAPIError(f"Request failed: {str(e)}") from e
 
 
 class ICUClient:

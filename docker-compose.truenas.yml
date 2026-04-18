@@ -26,9 +26,6 @@
 # Required environment variables:
 #   INTERVALS_ICU_API_KEY     - Intervals.icu API key (Settings → Developer)
 #   INTERVALS_ICU_ATHLETE_ID  - Your athlete ID (e.g. i123456, from profile URL)
-#   TP_AUTH_COOKIE            - TrainingPeaks Production_tpAuth cookie value
-#                               (DevTools → Application → Cookies → trainingpeaks.com)
-#                               Expires periodically — update here when TP tools stop working
 #
 # Optional:
 #   PORT                      - HTTP port (default: 8080)

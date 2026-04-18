@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an MCP (Model Context Protocol) server for Intervals.icu **and TrainingPeaks** that provides 54 tools, 1 resource, and 6 prompts for accessing training data, wellness metrics, and performance analysis through Claude and other LLMs.
+This is an MCP (Model Context Protocol) server for Intervals.icu that provides 48 tools, 1 resource, and 6 prompts for accessing training data, wellness metrics, and performance analysis through Claude and other LLMs.
 
-Repo name is `intervals-icu-mcp`; the published Docker image is `ghcr.io/coltbradley/training-data-mcp` (renamed when TP was added). The FastMCP server identifies itself as `"Training Data"`.
+Repo name is `intervals-icu-mcp`; the published Docker image is `ghcr.io/coltbradley/training-data-mcp`. The FastMCP server identifies itself as `"Training Data"`.
+
+A TrainingPeaks integration was attempted and removed — TP's API enforces TLS fingerprinting plus single-use cookie rotation, which makes server-side automation unworkable without a headless browser or partner OAuth credentials.
 
 Supports both stdio (local) and streamable-HTTP (remote, Docker) transports. Transport is controlled by `MCP_TRANSPORT` env var (`stdio` default; `http` used in Docker). HTTP mode exposes `/mcp` for the MCP protocol and `/health` for liveness checks.
 
@@ -79,22 +81,20 @@ make docker/run
 
 - `ConfigMiddleware` runs before every tool call
 - Loads and validates Intervals.icu configuration from environment (raises `ToolError` if missing)
-- Injects `ICUConfig` into context state as `"config"` and `TPConfig` as `"tp_config"`
-- Tools access config via `ctx.get_state("config")` / `ctx.get_state("tp_config")`
-- TP credentials are optional — TP tools return their own error if the cookie is missing/invalid
+- Injects `ICUConfig` into context state as `"config"`
+- Tools access config via `ctx.get_state("config")`
 
-**API Clients** (`client.py`)
+**API Client** (`client.py`)
 
 - `ICUClient` — async httpx client for Intervals.icu. Basic Auth with username `"API_KEY"`. Raises `ICUAPIError`.
-- `TPClient` — async httpx client for TrainingPeaks. Cookie-based auth (`Production_tpAuth`). Base URL `https://tpapi.trainingpeaks.com`. Raises `TPAPIError`.
-- Both are async context managers, 30s timeout default.
+- Async context manager, 30s timeout default.
 
 **Authentication** (`auth.py`)
 
-- `ICUConfig` + `TPConfig` both use pydantic-settings to load from `.env`
-- `load_config()` / `load_tp_config()` return the configs
-- `validate_credentials()` / `validate_tp_credentials()` check presence (treat placeholder values as invalid)
-- `update_env_key()` / `update_tp_env_key()` persist credentials to `.env`
+- `ICUConfig` uses pydantic-settings to load from `.env`
+- `load_config()` returns the config
+- `validate_credentials()` checks presence (treats placeholder values as invalid)
+- `update_env_key()` persists credentials to `.env`
 - Interactive setup: `scripts/setup_auth.py` (runs via `make auth` or `intervals-icu-mcp-auth`)
 
 **Response Builder** (`response_builder.py`)
@@ -118,7 +118,7 @@ make docker/run
 
 ### Tool Organization
 
-Tools are organized into 12 modules in `tools/` (grouped into 10 user-facing categories — `events.py` + `event_management.py` together are "Events/Calendar", `performance.py` + `curves.py` together are "Performance/Curves"):
+Tools are organized into 11 modules in `tools/` (grouped into 9 user-facing categories — `events.py` + `event_management.py` together are "Events/Calendar", `performance.py` + `curves.py` together are "Performance/Curves"):
 
 1. **activities.py** - Query and manage activities (10 tools)
 2. **activity_analysis.py** - Streams, intervals, best efforts, histograms (8 tools)
@@ -131,7 +131,6 @@ Tools are organized into 12 modules in `tools/` (grouped into 10 user-facing cat
 9. **workout_library.py** - Browse workout folders and plans (2 tools)
 10. **gear.py** - Gear and maintenance reminders (6 tools)
 11. **sport_settings.py** - FTP, FTHR, pace thresholds (5 tools)
-12. **trainingpeaks.py** - TP planned workouts, compliance, calendar, metrics (6 tools)
 
 ### Tool Pattern
 
@@ -165,10 +164,10 @@ async def tool_name(
 
 ### Authentication Flow
 
-1. User runs `make setup` (or `make auth`) — prompts for Intervals API key, athlete ID, and optional TP cookie
-2. Credentials stored in `.env` (`INTERVALS_ICU_API_KEY`, `INTERVALS_ICU_ATHLETE_ID`, `TP_AUTH_COOKIE`)
-3. `ConfigMiddleware` loads + validates Intervals creds on every tool call (TP is optional)
-4. `ICUClient` uses HTTP Basic Auth with username `"API_KEY"`; `TPClient` sends `Cookie: Production_tpAuth=...`
+1. User runs `make setup` (or `make auth`) — prompts for Intervals API key and athlete ID
+2. Credentials stored in `.env` (`INTERVALS_ICU_API_KEY`, `INTERVALS_ICU_ATHLETE_ID`)
+3. `ConfigMiddleware` loads + validates credentials on every tool call
+4. `ICUClient` uses HTTP Basic Auth with username `"API_KEY"`
 
 ### Error Handling
 
@@ -216,7 +215,7 @@ async def tool_name(
 ## Important Files
 
 - `.env` - Local credentials (not in git)
-- `.env.example` - Template for credentials (Intervals + TP)
+- `.env.example` - Template for credentials
 - `openapi-spec.json` - Intervals.icu API specification
 - `uv.lock` - Locked dependencies (commit this)
 - `Dockerfile` - Multi-stage build, runs HTTP transport on port 8080
@@ -224,4 +223,3 @@ async def tool_name(
 - `docker-compose.truenas.yml` - TrueNAS SCALE deployment (uses published image + watchtower)
 - `.github/workflows/test.yml` - CI tests
 - `.github/workflows/release.yml` - Docker publish to `ghcr.io/coltbradley/training-data-mcp`
-- `docs/plans/` - Implementation plans (e.g. TrainingPeaks integration)
